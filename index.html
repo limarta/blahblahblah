@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Real-time Face Censor</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -16,76 +13,97 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            background-color: #f0f4f8; /* Light background */
-            overflow: hidden; /* Prevent scrollbars during video processing */
+            min-height: 100vh; /* Use min-height to ensure full viewport coverage */
+            background-color: #e3f2fd; /* A softer, more modern background color */
+            color: #333; /* Darker text for better readability */
+            overflow: hidden; /* Prevent scrollbars */
         }
 
         .container {
-            position: relative; /* Allows for absolute positioning of video and canvas */
-            width: 100%;
-            max-width: 800px; /* Increased max-width for larger screens */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Slightly stronger shadow */
-            border-radius: 12px; /* More rounded corners */
-            overflow: hidden;  /* clip the video and canvas within the rounded corners */
-            background-color: #ffffff; /* Ensure container has a background */
-
+            position: relative;
+            width: 90%; /* Adjust width for responsiveness */
+            max-width: 800px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1); /* More pronounced shadow */
+            border-radius: 16px; /* Even more rounded corners */
+            overflow: hidden;
+            background-color: #fff; /* Clean white container */
+            padding: 20px; /* Add some padding inside the container */
+            box-sizing: border-box; /* Ensure padding doesn't increase container size */
         }
 
+        #webcamVideo, #outputCanvas {
+            display: block; /* Prevent extra space below inline elements */
+            width: 100%; /* Make video and canvas responsive within the container */
+            aspect-ratio: 6 / 4; /* Maintain aspect ratio */
+        }
+
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
 
         #loading {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(255, 255, 255, 0.8);
-            padding: 20px;
-            border-radius: 8px;
-            font-size: 18px;
+            background-color: rgba(255, 255, 255, 0.9); /* Slightly less transparent */
+            padding: 24px; /* Increased padding */
+            border-radius: 12px;
+            font-size: 1.1em; /* Slightly larger font */
+            font-weight: 500; /* Semi-bold for emphasis */
             z-index: 3;
-            display: none; /* Initially hidden, shown when loading */
+            display: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
         }
 
         #instructions {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px; /* More space from the bottom */
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(255, 255, 255, 0.7);
-            color: #333;
-            padding: 12px 20px; /* Slightly increased padding */
-            border-radius: 16px; /* Fully rounded corners */
-            font-size: 16px; /* Increased font size */
+            background-color: #f8f9fa; /* Light gray background */
+            color: #555; /* Slightly lighter text */
+            padding: 16px 24px; /* Increased padding */
+            border-radius: 20px; /* More rounded */
+            font-size: 1em;
             z-index: 3;
             text-align: center;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1); /* subtle shadow */
-            border: 1px solid rgba(255,255,255,0.3); /* Add a border */
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid #eee; /* Light border */
         }
+
         #error {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(255, 0, 0, 0.8);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            font-size: 18px;
+            background-color: #ffebee; /* Light red background */
+            color: #d32f2f; /* Darker red text */
+            padding: 24px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: 500;
             z-index: 3;
             display: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ef9a9a; /* Lighter red border */
+            text-align: center;
         }
-
     </style>
 </head>
 <body>
     <div class="container">
-        <video id="webcamVideo" autoplay playsinline muted></video>
-        <canvas id="outputCanvas" width="600px" height="400px"></canvas>
-        <div id="loading">Loading...</div>
-        <div id="instructions">Please allow webcam access.  Face censoring will begin automatically.</div>
+        <video id="webcamVideo" autoplay playsinline muted style="transform: scaleX(-1);"></video>
+        <canvas id="outputCanvas"></canvas>
+        <div id="loading">Loading Face Detection Model...</div>
+        <div id="instructions">Please grant webcam access. Face censoring will start automatically.</div>
         <div id="error"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
     <script>
         const videoElement = document.getElementById('webcamVideo');
         const canvasElement = document.getElementById('outputCanvas');
@@ -99,11 +117,13 @@
 
         async function setupWebcam() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }); // Use 'user' for front-facing
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
                 videoElement.srcObject = stream;
                 videoElement.onloadedmetadata = () => {
                     videoElement.play();
-                    startFaceDetection(); // Start after video metadata is loaded
+                    canvasElement.width = videoElement.videoWidth;
+                    canvasElement.height = videoElement.videoHeight;
+                    startFaceDetection();
                 };
             } catch (err) {
                 console.error("Error accessing the webcam:", err);
@@ -114,17 +134,7 @@
             }
         }
 
-
         async function loadBlazefaceModel() {
-          // const modelType = faceDetection.SupportedModels.MediaPipeFaceDetector;
-          // const detectorConfig = {
-          //   runtime: 'tfjs', // or 'mediapipe'
-          //   maxFaces: 1, // Optional: Maximum number of faces to detect
-          //   modelType: 'short', // Optional: 'short' or 'full' for model range
-          // };
-          // model = await faceDetection.createDetector(modelType, detectorConfig);
-
-
             loadingElement.style.display = 'block';
             try {
                 model = await blazeface.load();
@@ -136,35 +146,34 @@
                 loadingElement.style.display = 'none';
                 instructionsElement.style.display = 'none';
                 return;
-
             }
         }
 
         async function detectFaces() {
             try {
-                if (!model) {
-                } else {
-                  const predictions = await model.estimateFaces(videoElement, flipHorizontal=false);
+                if (model) {
+                    const predictions = await model.estimateFaces(videoElement, false);
 
-                  canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
-                  canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-                  //
-                  predictions.forEach(prediction => {
-                      console.log(prediction);
-                      const start = prediction.topLeft;
-                      const end = prediction.bottomRight;
-                      const width = end[0] - start[0];
-                      const height = end[1] - start[1];
-                      canvasContext.fillStyle = 'black';
-                      canvasContext.fillRect(start[0], start[1], width, height);
-                  });
+                    canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
+                    predictions.forEach(prediction => {
+                        const start = prediction.topLeft;
+                        const end = prediction.bottomRight;
+                        const width = end[0] - start[0];
+                        const height = end[1] - start[1];
+                        canvasContext.fillStyle = 'black'; // Slightly transparent black
+                        canvasContext.fillRect(start[0], start[1], width, height);
+                    });
                 }
-                requestAnimationFrame(detectFaces);
+                if (isRunning) {
+                    requestAnimationFrame(detectFaces);
+                }
             } catch (error) {
                 isRunning = false;
-                errorElement.textContent = "Error during face detection.  The application has stopped.";
+                errorElement.textContent = "Error during face detection. The application has stopped.";
                 errorElement.style.display = 'block';
-
+                console.error("Detection error:", error);
             }
         }
 
@@ -176,11 +185,6 @@
             }
         }
 
-        function stopFaceDetection() {
-            isRunning = false;
-        }
-
-
         (async () => {
             await setupWebcam();
             await loadBlazefaceModel();
@@ -188,4 +192,3 @@
     </script>
 </body>
 </html>
-
