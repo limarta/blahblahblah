@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Face Censor</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f4f8; /* Light background */
+            overflow: hidden; /* Prevent scrollbars during video processing */
+        }
+
+        .container {
+            position: relative; /* Allows for absolute positioning of video and canvas */
+            width: 100%;
+            max-width: 800px; /* Increased max-width for larger screens */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); /* Slightly stronger shadow */
+            border-radius: 12px; /* More rounded corners */
+            overflow: hidden;  /* clip the video and canvas within the rounded corners */
+            background-color: #ffffff; /* Ensure container has a background */
+
+        }
+
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            z-index: 3;
+            display: none; /* Initially hidden, shown when loading */
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.7);
+            color: #333;
+            padding: 12px 20px; /* Slightly increased padding */
+            border-radius: 16px; /* Fully rounded corners */
+            font-size: 16px; /* Increased font size */
+            z-index: 3;
+            text-align: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1); /* subtle shadow */
+            border: 1px solid rgba(255,255,255,0.3); /* Add a border */
+        }
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 18px;
+            z-index: 3;
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <video id="webcamVideo" autoplay playsinline muted></video>
+        <canvas id="outputCanvas" width="600px" height="400px"></canvas>
+        <div id="loading">Loading...</div>
+        <div id="instructions">Please allow webcam access.  Face censoring will begin automatically.</div>
+        <div id="error"></div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('webcamVideo');
+        const canvasElement = document.getElementById('outputCanvas');
+        const canvasContext = canvasElement.getContext('2d');
+        const loadingElement = document.getElementById('loading');
+        const instructionsElement = document.getElementById('instructions');
+        const errorElement = document.getElementById('error');
+
+        let model = null;
+        let isRunning = false;
+
+        async function setupWebcam() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } }); // Use 'user' for front-facing
+                videoElement.srcObject = stream;
+                videoElement.onloadedmetadata = () => {
+                    videoElement.play();
+                    startFaceDetection(); // Start after video metadata is loaded
+                };
+            } catch (err) {
+                console.error("Error accessing the webcam:", err);
+                errorElement.textContent = `Error accessing webcam: ${err.message}`;
+                errorElement.style.display = 'block';
+                loadingElement.style.display = 'none';
+                instructionsElement.style.display = 'none';
+            }
+        }
+
+
+        async function loadBlazefaceModel() {
+          // const modelType = faceDetection.SupportedModels.MediaPipeFaceDetector;
+          // const detectorConfig = {
+          //   runtime: 'tfjs', // or 'mediapipe'
+          //   maxFaces: 1, // Optional: Maximum number of faces to detect
+          //   modelType: 'short', // Optional: 'short' or 'full' for model range
+          // };
+          // model = await faceDetection.createDetector(modelType, detectorConfig);
+
+
+            loadingElement.style.display = 'block';
+            try {
+                model = await blazeface.load();
+                loadingElement.style.display = 'none';
+            } catch (error) {
+                console.error("Failed to load model:", error);
+                errorElement.textContent = "Failed to load the face detection model. Please check your network connection.";
+                errorElement.style.display = 'block';
+                loadingElement.style.display = 'none';
+                instructionsElement.style.display = 'none';
+                return;
+
+            }
+        }
+
+        async function detectFaces() {
+            try {
+                if (!model) {
+                } else {
+                  const predictions = await model.estimateFaces(videoElement, flipHorizontal=false);
+
+                  canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                  canvasContext.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                  //
+                  predictions.forEach(prediction => {
+                      console.log(prediction);
+                      const start = prediction.topLeft;
+                      const end = prediction.bottomRight;
+                      const width = end[0] - start[0];
+                      const height = end[1] - start[1];
+                      canvasContext.fillStyle = 'black';
+                      canvasContext.fillRect(start[0], start[1], width, height);
+                  });
+                }
+                requestAnimationFrame(detectFaces);
+            } catch (error) {
+                isRunning = false;
+                errorElement.textContent = "Error during face detection.  The application has stopped.";
+                errorElement.style.display = 'block';
+
+            }
+        }
+
+        function startFaceDetection() {
+            if (!isRunning) {
+                isRunning = true;
+                instructionsElement.style.display = 'none';
+                detectFaces();
+            }
+        }
+
+        function stopFaceDetection() {
+            isRunning = false;
+        }
+
+
+        (async () => {
+            await setupWebcam();
+            await loadBlazefaceModel();
+        })();
+    </script>
+</body>
+</html>
+
