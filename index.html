@@ -96,10 +96,18 @@
 <body>
     <div class="container">
         <video id="webcamVideo" autoplay playsinline muted style="transform: scaleX(-1);"></video>
-        <canvas id="outputCanvas"></canvas>
+        <canvas id="outputCanvas" style="transform: scaleX(-1);"></canvas>
         <div id="loading">Loading Face Detection Model...</div>
         <div id="instructions">Please grant webcam access. Face censoring will start automatically.</div>
         <div id="error"></div>
+    </div>
+    <div id="controls" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px;">
+        <button id="recordButton" style="padding: 10px 20px; font-size: 1em;  background-color: #ccc;" disabled>
+            Record
+        </button>
+        <button id="downloadButton" style="padding: 10px 20px; font-size: 1em; background-color: #ccc;" disabled>
+            Download
+        </button>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
@@ -111,9 +119,13 @@
         const loadingElement = document.getElementById('loading');
         const instructionsElement = document.getElementById('instructions');
         const errorElement = document.getElementById('error');
+        const recordButton = document.getElementById('recordButton');
+        const downloadButton = document.getElementById('downloadButton');
 
         let model = null;
         let isRunning = false;
+        let mediaRecorder = null;
+        let recordedChunks = [];
 
         async function setupWebcam() {
             try {
@@ -139,6 +151,7 @@
             try {
                 model = await blazeface.load();
                 loadingElement.style.display = 'none';
+                recordButton.disabled = false;
             } catch (error) {
                 console.error("Failed to load model:", error);
                 errorElement.textContent = "Failed to load the face detection model. Please check your network connection.";
@@ -162,9 +175,10 @@
                         const end = prediction.bottomRight;
                         const width = end[0] - start[0];
                         const height = end[1] - start[1];
-                        canvasContext.fillStyle = 'black'; // Slightly transparent black
+                        canvasContext.fillStyle = 'black'; 
                         canvasContext.fillRect(start[0], start[1], width, height);
                     });
+                    
                 }
                 if (isRunning) {
                     requestAnimationFrame(detectFaces);
@@ -184,6 +198,43 @@
                 detectFaces();
             }
         }
+
+        function startRecording() {
+            const stream = canvasElement.captureStream();
+            mediaRecorder = new MediaRecorder(stream);
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                downloadButton.href = url;
+                downloadButton.download = 'censored-video.webm';
+                downloadButton.style.cursor = 'pointer';
+                downloadButton.style.backgroundColor = '';
+                downloadButton.disabled = false;
+            };
+
+            mediaRecorder.start();
+            recordButton.textContent = 'Stop Recording';
+        }
+        function stopRecording() {
+            mediaRecorder.stop();
+            recordButton.textContent = 'Record';
+        }
+
+        recordButton.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            } else {
+                startRecording();
+            }
+        });
 
         (async () => {
             await setupWebcam();
