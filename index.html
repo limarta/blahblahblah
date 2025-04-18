@@ -240,6 +240,14 @@
             await setupWebcam();
             await loadBlazefaceModel();
         })();
+        downloadButton.addEventListener('click', () => {
+            if (downloadButton.href) {
+                const anchor = document.createElement('a');
+                anchor.href = downloadButton.href;
+                anchor.download = downloadButton.download || 'censored-video.webm';
+                anchor.click();
+            }
+        });
     </script>
 </body>
 </html>
