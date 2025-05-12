@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Editor - Crop & Mask (Vanilla JS Download)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+            background-color: #f3f0e9; /* A softer, more modern background color */
+        }
+        canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: auto; /* Maintain aspect ratio */
+            cursor: crosshair; /* Default cursor for drawing */
+            border: 1px solid #ccc; /* Add border for visibility */
+            background-color: #f0f0f0; /* Light background for empty canvas */
+        }
+        .gallery-container {
+            width: 100%;
+            max-width: 500px; /* Limit gallery width */
+            margin: 0 auto; /* Center gallery */
+        }
+        .toolbar button {
+            transition: background-color 0.2s ease;
+        }
+        .toolbar button.active {
+            background-color: #6fabc0; /* Blue-500 */
+            color: white;
+        }
+        /* Style for the drawing rectangle indicator */
+        #indicatorRect {
+            position: absolute;
+            border: 2px dashed rgba(255, 0, 0, 0.7);
+            pointer-events: none; /* Don't interfere with canvas events */
+            display: none; /* Hidden by default */
+            z-index: 10;
+        }
+        /* Styles for download area */
+        .download-item {
+            display: inline-block;
+            margin: 0.5rem;
+            text-align: center;
+            vertical-align: top;
+        }
+        .download-item img {
+            max-width: 100px;
+            max-height: 100px;
+            border: 1px solid #ccc;
+            margin-bottom: 0.5rem;
+            object-fit: contain; /* Show whole image */
+            background-color: #eee; /* Background for transparent parts */
+        }
+        .download-item a {
+             display: block; /* Make link take full width */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+</head>
+<body>
+    <div class="container mx-auto max-w-6xl px-4 py-12 flex items-center flex-col gap-8">
+        <div class="mb-4 grid grid-cols-1 gap-4 md:gap-8">
+            <div class="border px-4 py-2 rounded-lg bg-[#e9f0e6] shadow">
+                <div class="gallery-container relative">
+                    <canvas id="beforeCanvas"></canvas>
+                </div>
+                <div class="flex justify-between items-center mt-2 mb-1">
+                    <button id="prevBtnBefore" class="bg-white text-black font-bold py-2 px-4 rounded-l disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M20 12H4.121m6.129 6.75l-5.69-5.69A1.5 1.5 0 0 1 4.122 12m6.129-6.75l-5.69 5.69A1.5 1.5 0 0 0 4.122 12'/%3E%3C/svg%3E"/>
+                    </button>
+                    <span id="indicatorBefore" class="text-gray-600 font-medium">0 / 0</span>
+                    <button id="nextBtnBefore" class="bg-white text-black font-bold py-2 px-4 rounded-r disabled:opacity-30 disabled:cursor-not-allowed" disabled>
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M4 12h15.879m-6.129 6.75l5.69-5.69c.292-.292.439-.676.439-1.06M13.75 5.25l5.69 5.69c.292.292.439.676.439 1.06'/%3E%3C/svg%3E"/>
+                    </button>
+                </div>
+                <div class="text-center flex items-center flex-col">
+                    <label for="imageUpload" class="cursor-pointer bg-white w-32 font-medium text-sm py-2 px-4 rounded shadow transition duration-200 flex items-center justify-center content-center gap-1">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M12 16.349V3.87M6.118 9.132l4.821-4.821c.293-.293.677-.44 1.061-.44m5.882 5.261l-4.821-4.821A1.5 1.5 0 0 0 12 3.87m8.75 12.645v.935a3.3 3.3 0 0 1-3.3 3.3H6.55a3.3 3.3 0 0 1-3.3-3.3v-.935'/%3E%3C/svg%3E"/> Upload
+                    </label>
+                    <input type="file" id="imageUpload" multiple accept="image/*" class="hidden">
+                    <p id="uploadStatus" class="text-sm text-gray-500 mt-1">No images selected.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-4">
+            <div class="border px-4 py-2 rounded bg-[#e9f0e6] shadow">
+                <h2 class="text-xl font-semibold mb-1 text-center">Mask</h2>
+                <div class="gallery-container relative">
+                    <canvas id="maskCanvas"></canvas>
+                    <div id="indicatorRect"></div>
+                </div>
+                <div id="toolbar" class="toolbar flex justify-center space-x-2 pt-2">
+                    <button id="cropTool" data-tool="crop" class="bg-white font-medium py-2 px-4 rounded text-sm shadow flex items-center justify-center content-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" style="color: inherit;">
+                            <!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE -->
+                            <path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21.25 17.653H9.347a3 3 0 0 1-3-3V2.75M2.75 6.347h3.597m11.306 11.306v3.597M8.917 6.347h5.736a3 3 0 0 1 3 3v5.736"/>
+                        </svg>
+                        Crop
+                    </button>
+                    <button id="maskTool" data-tool="mask" class="bg-white font-medium py-2 px-4 rounded text-sm shadow flex items-center justify-center content-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --><g fill="none"><path fill="currentColor" d="M12.748 15.75a3 3 0 0 0 3-3v-4.5h-4.496a3 3 0 0 0-3 3v4.5z"/><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.252 15.75v2.5a3 3 0 0 0 3 3h7a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3h-2.504m-7.496 7.5v-4.5a3 3 0 0 1 3-3h4.496m-7.496 7.5h4.496a3 3 0 0 0 3-3v-4.5m-7.496 7.5H5.748a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h7a3 3 0 0 1 3 3v2.5"/></g></svg>
+                        Mask
+                    </button>
+                    <button id="resetTool" class="bg-[#de5a46] text-white font-medium py-2 px-4 rounded text-sm shadow flex items-center justify-center content-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"><!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4.281 14.385a8.25 8.25 0 1 0 .824-6.26l-.477.88m-.523-4.63v3.75a1 1 0 0 0 .523.88m4.227.12h-3.75a1 1 0 0 1-.477-.12"/></svg>
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <div class="border px-4 py-2 rounded-lg bg-[#e9f0e6] shadow">
+                <h2 class="text-xl font-semibold mb-1 text-center">Processed</h2>
+                 <div class="gallery-container">
+                    <canvas id="afterCanvas"></canvas>
+                 </div>
+                <div class="flex justify-between items-center mt-2">
+                    <button id="prevBtnAfter" class="bg-white text-black font-bold py-2 px-4 rounded-l disabled:opacity-30 disabled:cursor-not-allowed">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M20 12H4.121m6.129 6.75l-5.69-5.69A1.5 1.5 0 0 1 4.122 12m6.129-6.75l-5.69 5.69A1.5 1.5 0 0 0 4.122 12'/%3E%3C/svg%3E"/>
+                    </button>
+                    <span id="indicatorAfter" class="text-gray-600 font-medium">0 / 0</span>
+                    <button id="nextBtnAfter" class="bg-white text-black font-bold py-2 px-4 rounded-r disabled:opacity-30 disabled:cursor-not-allowed">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M4 12h15.879m-6.129 6.75l5.69-5.69c.292-.292.439-.676.439-1.06M13.75 5.25l5.69 5.69c.292.292.439.676.439 1.06'/%3E%3C/svg%3E"/>
+                    </button>
+                </div>
+                <div id="downloadArea" class="hidden mt-2">
+                    <div id="downloadContainer" class="flex flex-wrap justify-center items-start">
+                        </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State Variables ---
+        window.CACHE = new Object() // Outputs cache
+        window.INPUTS_CACHE = new Object() // Inputs cache
+        // LoadImageBulk_output
+        {
+            let _originalImages = []; // Stores { file: File, dataURL: string, element: Image }
+            let _currentIndex = 0;
+            window.CACHE['LoadImageBulk_output'] = {
+                "originalImages": _originalImages,
+                "currentIndex": _currentIndex,
+            };
+        }
+        // LoadMaskEditable_inputHashes
+        {
+            window.INPUTS_CACHE['LoadMaskEditable_inputHashes'] = {
+                "originalImages": "",
+                "currentIndex": "",
+            };
+        }
+        // LoadMaskEditable_output
+        {
+            let _cropRect = null; // { x, y, width, height } relative to original image dimensions (0-1 scale)
+            let _maskRects = []; // Array of { x, y, width, height } relative to original image dimensions (0-1 scale)
+            let _activeTool = null; // 'crop', 'mask', or null
+            let _isDrawing = false;
+            let _startCoords = { x: 0, y: 0 }; // Relative to canvas
+            let _currentRect = { x: 0, y: 0, width: 0, height: 0 }; // For drawing indicator
+            window.CACHE['LoadMaskEditable_output'] = {
+                "cropRect": _cropRect,
+                "maskRects": _maskRects,
+                "activeTool": _activeTool,
+                "isDrawing": _isDrawing,
+                "startCoords": _startCoords,
+                "currentRect": _currentRect,
+            };
+        }
+        // ApplyMask_inputHashes
+        {
+            window.INPUTS_CACHE['ApplyMask_inputHashes'] = {
+                "originalImages": "",
+                "cropRect": "",
+                "maskRects": "",
+            };
+        }
+        // ApplyMask_output
+        {
+            let _processedImageDataUrls = []; // Stores data URLs of processed images
+            window.CACHE['ApplyMask_output'] = {
+                "processedImageDataUrls": _processedImageDataUrls,
+            };
+        }
+        // PreviewImage_inputHashes
+        {
+            window.INPUTS_CACHE['PreviewImage_inputHashes'] = {
+                "processedImageDataUrls": "",
+                "currentIndex": "",
+            };
+        }
+        // PreviewImage_output
+        {
+            let _currentIndex = 0;
+            window.CACHE['PreviewImage_output'] = {
+                "currentIndex": _currentIndex,
+            };
+        }
+        // --- Functions ---
+        function Util_stableStringify(obj) {
+            if (Array.isArray(obj)) {
+                return `[${obj.map(Util_stableStringify).join(',')}]`;
+            } else if (obj && typeof obj === 'object') {
+                return `{${Object.keys(obj).sort().map(
+                    key => JSON.stringify(key) + ':' + Util_stableStringify(obj[key])
+                ).join(',')}}`;
+            } else {
+                return JSON.stringify(obj);
+            }
+        }
+
+        function Util_hash(obj) {
+          const str = Util_stableStringify(obj);
+          let hash = 5381;
+          for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) + hash) + str.charCodeAt(i);
+          }
+          return (hash >>> 0).toString(16);
+        }
+
+        function DomUtil_updateIndicator(indicator, length, index) {
+            const total = length;
+            const currentNum = total > 0 ? index + 1 : 0;
+            indicator.textContent = `${currentNum} / ${total}`;
+        }
+
+        function DomUtil_updateNavButtons(prevBtn, nextBtn, length, index) {
+            const total = length;
+            prevBtn.disabled = (index <= 0);
+            nextBtn.disabled = (index >= total - 1);
+        }
+
+        function DomUtil_getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            // Clamp coordinates to be within the canvas boundaries
+            const x = Math.max(0, Math.min(evt.clientX - rect.left, canvas.width));
+            const y = Math.max(0, Math.min(evt.clientY - rect.top, canvas.height));
+            return { x, y };
+        }
+
+        function DomUtil_clearCanvas(ctx, canvas) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#f4f4f4';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '16px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText('No Image', canvas.width / 2, canvas.height / 2);
+        }
+
+        // example outputsSpec = [
+        //     ['LoadImageBulk_output', 'currentIndex'],
+        //     ['ApplyMask_output', 'processedImageDataUrls'],
+        // ];
+        // tl;dr - checks if the inputs have/haven't changed since the prev. execution
+        function WorkflowUtil_canSkipExecution(thisNodeName, outputsSpec) {
+            const isCacheHit = WorkflowUtil_isCacheHit(thisNodeName, outputsSpec)
+            if (!isCacheHit) {
+               WorkflowUtil_updateInputsCacheHashes(thisNodeName, outputsSpec)
+            }
+            return isCacheHit;
+        }
+
+        function WorkflowUtil_isCacheHit(thisNodeName, outputsSpec) {
+            for (const [nodeName, outputName] of outputsSpec) {
+                if (Util_hash(window.CACHE[nodeName][outputName]) != window.INPUTS_CACHE[thisNodeName][outputName]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function WorkflowUtil_updateInputsCacheHashes(thisNodeName, outputsSpec) {
+            for (const [nodeName, outputName] of outputsSpec) {
+                window.INPUTS_CACHE[thisNodeName][outputName] = Util_hash(window.CACHE[nodeName][outputName]);
+            }
+        }
+
+        (function Workflow_execute() {
+            // --- Functions ---
+            setInterval(() => {
+                PreviewImage_execute()
+                ApplyMask_execute()
+                LoadMaskEditable_execute()
+            }, 100); // checks every 100ms
+        })();
+
+        (async function LoadImageBulk_init() {
+            // --- DOM Elements ---
+            const imageUpload = document.getElementById('imageUpload');
+            const uploadStatus = document.getElementById('uploadStatus');
+            const beforeCanvas = document.getElementById('beforeCanvas');
+            const beforeCtx = beforeCanvas.getContext('2d');
+            const prevBtnBefore = document.getElementById('prevBtnBefore');
+            const nextBtnBefore = document.getElementById('nextBtnBefore');
+            const indicatorBefore = document.getElementById('indicatorBefore');
+            await document.fonts.load('16px Inter');
+            DomUtil_clearCanvas(beforeCtx, beforeCanvas);
+            // --- Event Listeners ---
+            imageUpload.addEventListener('change', handleImageUpload);
+            prevBtnBefore.addEventListener('click', showPreviousImage);
+            nextBtnBefore.addEventListener('click', showNextImage);
+            // --- Functions ---
+            function showPreviousImage() {
+                const originalImages = window.CACHE['LoadImageBulk_output']['originalImages'];
+                const currentIndex = window.CACHE['LoadImageBulk_output']['currentIndex'];
+                if (currentIndex > 0) {
+                    const newIndex = currentIndex - 1;
+                    displayImage(originalImages, newIndex);
+                    window.CACHE['LoadImageBulk_output']['currentIndex'] = newIndex;
+                }
+            }
+
+            function showNextImage() {
+                const originalImages = window.CACHE['LoadImageBulk_output']['originalImages'];
+                const currentIndex = window.CACHE['LoadImageBulk_output']['currentIndex'];
+                if (currentIndex < originalImages.length - 1) {
+                    const newIndex = currentIndex + 1;
+                    displayImage(originalImages, newIndex);
+                    window.CACHE['LoadImageBulk_output']['currentIndex'] = newIndex;
+                }
+            }
+
+            function handleImageUpload(event) {
+                const files = event.target.files;
+                if (!files || files.length === 0) {
+                    uploadStatus.textContent = 'No images selected.';
+                    resetState();
+                    return;
+                }
+
+                resetState();
+                let originalImages = [];
+                let processedImageDataUrls = [];
+                const promises = [];
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (!file.type.startsWith('image/')) continue;
+
+                    const promise = new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                originalImages.push({ file: file, dataURL: e.target.result, element: img });
+                                resolve();
+                            };
+                            img.onerror = reject;
+                            img.src = e.target.result;
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    promises.push(promise);
+                }
+
+                Promise.all(promises)
+                    .then(() => {
+                        if (originalImages.length > 0) {
+                            uploadStatus.textContent = `${originalImages.length} image(s) loaded.`;
+                            const currentIndex = 0;
+                            window.CACHE['LoadImageBulk_output'] = {
+                                "originalImages": originalImages,
+                                "currentIndex": currentIndex,
+                            };
+                            displayImage(originalImages, currentIndex);
+                        } else {
+                            uploadStatus.textContent = 'No valid images found in selection.';
+                            resetState();
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error loading images:", error);
+                        uploadStatus.textContent = 'Error loading images.';
+                        resetState();
+                    });
+            }
+            
+            function displayImage(originalImages, currentIndex) {
+                const currentImage = originalImages[currentIndex].element;
+
+                // --- Draw on Before Canvas ---
+                const containerWidth = beforeCanvas.parentElement.clientWidth;
+                const scale = Math.min(1, containerWidth / currentImage.naturalWidth);
+                beforeCanvas.width = currentImage.naturalWidth * scale;
+                beforeCanvas.height = currentImage.naturalHeight * scale;
+                beforeCtx.drawImage(currentImage, 0, 0, beforeCanvas.width, beforeCanvas.height);
+
+                DomUtil_updateIndicator(indicatorBefore, originalImages.length, currentIndex);
+                DomUtil_updateNavButtons(prevBtnBefore, nextBtnBefore, originalImages.length, currentIndex);
+            }
+        })();
+
+        (async function LoadMaskEditable_init() {
+            // --- DOM Elements ---
+            const toolbar = document.getElementById('toolbar');
+            const maskCanvas = document.getElementById('maskCanvas');
+            const maskCtx = maskCanvas.getContext('2d');
+            const cropToolBtn = document.getElementById('cropTool');
+            const maskToolBtn = document.getElementById('maskTool');
+            const resetToolBtn = document.getElementById('resetTool');
+            const indicatorRect = document.getElementById('indicatorRect');
+            await document.fonts.load('16px Inter');
+            DomUtil_clearCanvas(maskCtx, maskCanvas);
+            // --- Event Listeners ---
+            cropToolBtn.addEventListener('click', () => setActiveTool('crop'));
+            maskToolBtn.addEventListener('click', () => setActiveTool('mask'));
+            resetToolBtn.addEventListener('click', resetTransformations);
+            maskCanvas.addEventListener('pointerdown', handleMouseDown);
+            maskCanvas.addEventListener('touchmove', (e) => {e.preventDefault()}, { passive: false });
+            document.addEventListener('pointermove', handleMouseMove);
+            document.addEventListener('pointerup', handleMouseUp);
+            // --- Functions ---
+            function setActiveTool(toolName) {
+                const activeTool = toolName;
+                toolbar.querySelectorAll('button[data-tool]').forEach(btn => {
+                    if (btn.dataset.tool === toolName) {
+                        btn.classList.add('active');
+                        maskCanvas.style.cursor = toolName ? 'crosshair' : 'default';
+                    } else {
+                        btn.classList.remove('active');
+                    }
+                });
+                const isDrawing = false;
+                indicatorRect.style.display = 'none';
+
+                window.CACHE['LoadMaskEditable_output']['activeTool'] = activeTool;
+                window.CACHE['LoadMaskEditable_output']['isDrawing'] = isDrawing;
+            }
+
+            function resetTransformations() {
+                setActiveTool(null);
+                
+                window.CACHE['LoadMaskEditable_output']['cropRect'] = null;
+                window.CACHE['LoadMaskEditable_output']['maskRects'] = [];
+            }
+
+            function handleMouseDown(event) {
+                const isDrawing = true;
+                // Use clamped coordinates for start
+                const startCoords = DomUtil_getMousePos(maskCanvas, event);
+                indicatorRect.style.left = `${startCoords.x + maskCanvas.offsetLeft}px`;
+                indicatorRect.style.top = `${startCoords.y + maskCanvas.offsetTop}px`;
+                indicatorRect.style.width = '0px';
+                indicatorRect.style.height = '0px';
+                indicatorRect.style.display = 'block';
+
+                window.CACHE['LoadMaskEditable_output']['isDrawing'] = isDrawing;
+                window.CACHE['LoadMaskEditable_output']['startCoords'] = startCoords;
+            }
+
+            function handleMouseMove(event) {
+                const isDrawing = window.CACHE['LoadMaskEditable_output']['isDrawing'];
+                const activeTool = window.CACHE['LoadMaskEditable_output']['activeTool'];
+                const startCoords = window.CACHE['LoadMaskEditable_output']['startCoords'];
+
+                if (!isDrawing || !activeTool) return;
+
+                // console.log(event)
+
+                // Use clamped coordinates for current position
+                const currentPos = DomUtil_getMousePos(maskCanvas, event);
+
+                // Calculate rectangle coordinates relative to canvas
+                let currentRect = { x: 0, y: 0, width: 0, height: 0 }; // For drawing indicator
+                currentRect.x = Math.min(startCoords.x, currentPos.x);
+                currentRect.y = Math.min(startCoords.y, currentPos.y);
+                currentRect.width = Math.abs(startCoords.x - currentPos.x);
+                currentRect.height = Math.abs(startCoords.y - currentPos.y);
+
+                // Update visual indicator rectangle based on calculated rect
+                indicatorRect.style.left = `${currentRect.x + maskCanvas.offsetLeft}px`;
+                indicatorRect.style.top = `${currentRect.y + maskCanvas.offsetTop}px`;
+                indicatorRect.style.width = `${currentRect.width}px`;
+                indicatorRect.style.height = `${currentRect.height}px`;
+
+                window.CACHE['LoadMaskEditable_output']['currentRect'] = currentRect;
+            }
+
+            function handleMouseUp(event) {
+                const isDrawing = window.CACHE['LoadMaskEditable_output']['isDrawing'];
+                const activeTool = window.CACHE['LoadMaskEditable_output']['activeTool'];
+                const startCoords = window.CACHE['LoadMaskEditable_output']['startCoords'];
+
+                if (!isDrawing || !activeTool) return;
+
+                indicatorRect.style.display = 'none';
+
+                // Use clamped coordinates for end position
+                const endCoords = DomUtil_getMousePos(maskCanvas, event);
+
+                // Calculate final rectangle based on potentially clamped start/end
+                const finalRect = {
+                    x: Math.min(startCoords.x, endCoords.x),
+                    y: Math.min(startCoords.y, endCoords.y),
+                    width: Math.abs(startCoords.x - endCoords.x),
+                    height: Math.abs(startCoords.y - endCoords.y)
+                };
+
+                if (finalRect.width < 1 || finalRect.height < 1) return; // Avoid zero-sized
+
+                let relativeRect = {
+                    x: finalRect.x / maskCanvas.width,
+                    y: finalRect.y / maskCanvas.height,
+                    width: finalRect.width / maskCanvas.width,
+                    height: finalRect.height / maskCanvas.height
+                };
+
+                // Clamp relative values between 0 and 1 (important after scaling)
+                relativeRect.x = Math.max(0, Math.min(1, relativeRect.x));
+                relativeRect.y = Math.max(0, Math.min(1, relativeRect.y));
+                relativeRect.width = Math.max(0, Math.min(1 - relativeRect.x, relativeRect.width));
+                relativeRect.height = Math.max(0, Math.min(1 - relativeRect.y, relativeRect.height));
+
+                window.CACHE['LoadMaskEditable_output']['isDrawing'] = false;
+                if (activeTool === 'crop') {
+                    window.CACHE['LoadMaskEditable_output']['cropRect'] = relativeRect;
+                    // console.log("Crop Rect Set (Relative):", cropRect);
+                } else if (activeTool === 'mask') {
+                    window.CACHE['LoadMaskEditable_output']['maskRects'].push(relativeRect);
+                    // console.log("Mask Rect Added (Relative):", relativeRect);
+                }
+            }
+        })();
+
+        function LoadMaskEditable_execute() {
+            // --- Optimizations ---
+            if (WorkflowUtil_canSkipExecution(
+                'LoadMaskEditable_inputHashes',
+                [
+                    ['LoadImageBulk_output', 'originalImages'],
+                    ['LoadImageBulk_output', 'currentIndex'],
+                ],
+            )) {
+                return;
+            }
+            // --- DOM Elements ---
+            const maskCanvas = document.getElementById('maskCanvas');
+            const maskCtx = maskCanvas.getContext('2d');
+            // --- Inputs ---
+            const originalImages = window.CACHE['LoadImageBulk_output']['originalImages'];
+            const currentIndex = window.CACHE['LoadImageBulk_output']['currentIndex'];
+            // --- Functions ---
+            (function displayImage() {
+                const currentImage = originalImages[currentIndex].element;
+
+                // --- Draw on Mask Canvas ---
+                DomUtil_clearCanvas(maskCtx, maskCanvas);
+                const containerWidth = maskCanvas.parentElement.clientWidth;
+                const scale = Math.min(1, containerWidth / currentImage.naturalWidth);
+                maskCanvas.width = currentImage.naturalWidth * scale;
+                maskCanvas.height = currentImage.naturalHeight * scale;
+                maskCtx.drawImage(currentImage, 0, 0, maskCanvas.width, maskCanvas.height);
+            })();
+        }
+
+        function ApplyMask_execute() {
+            // --- Optimizations ---
+            if (WorkflowUtil_canSkipExecution(
+                'ApplyMask_inputHashes',
+                [
+                    ['LoadImageBulk_output', 'originalImages'],
+                    ['LoadMaskEditable_output', 'cropRect'],
+                    ['LoadMaskEditable_output', 'maskRects'],
+                ],
+            )) {
+                return;
+            }
+            // --- Inputs ---
+            const originalImages = window.CACHE['LoadImageBulk_output']['originalImages'];
+            const cropRect = window.CACHE['LoadMaskEditable_output']['cropRect'];
+            const maskRects = window.CACHE['LoadMaskEditable_output']['maskRects'];
+            // --- Functions ---
+            (function processAllImages() {
+                console.log("processAllImages")
+                if (originalImages.length === 0) {
+                    const processedImageDataUrls = [];
+                    window.CACHE['ApplyMask_output'] = {
+                        "processedImageDataUrls": processedImageDataUrls,
+                    };
+                    return;
+                }
+                const processedImageDataUrls = originalImages.map(imgData => {
+                    try {
+                        return applyTransformations(imgData.element, cropRect, maskRects);
+                    } catch (error) {
+                        console.error("Error processing image:", imgData.file.name, error);
+                        return null; // Return null for images that failed processing
+                    }
+                });
+                window.CACHE['ApplyMask_output'] = {
+                    "processedImageDataUrls": processedImageDataUrls,
+                };
+            })();
+
+            function applyTransformations(imageElement, cropRect, maskRects) {
+                const offscreenCanvas = document.createElement('canvas');
+                const offscreenCtx = offscreenCanvas.getContext('2d');
+                const originalWidth = imageElement.naturalWidth;
+                const originalHeight = imageElement.naturalHeight;
+
+                let sourceX = 0, sourceY = 0, sourceWidth = originalWidth, sourceHeight = originalHeight;
+                let destWidth = originalWidth, destHeight = originalHeight;
+
+                if (cropRect && cropRect.width > 0 && cropRect.height > 0) {
+                    sourceX = cropRect.x * originalWidth;
+                    sourceY = cropRect.y * originalHeight;
+                    sourceWidth = cropRect.width * originalWidth;
+                    sourceHeight = cropRect.height * originalHeight;
+                    destWidth = sourceWidth;
+                    destHeight = sourceHeight;
+                }
+
+                offscreenCanvas.width = destWidth;
+                offscreenCanvas.height = destHeight;
+
+                offscreenCtx.drawImage(
+                    imageElement,
+                    sourceX, sourceY, sourceWidth, sourceHeight,
+                    0, 0, destWidth, destHeight
+                );
+
+                if (maskRects.length > 0) {
+                    offscreenCtx.fillStyle = 'black';
+                    maskRects.forEach(mask => {
+                        if (mask.width > 0 && mask.height > 0) {
+                            const maskOrigX = mask.x * originalWidth;
+                            const maskOrigY = mask.y * originalHeight;
+                            const maskOrigW = mask.width * originalWidth;
+                            const maskOrigH = mask.height * originalHeight;
+                            const maskDestX = maskOrigX - sourceX;
+                            const maskDestY = maskOrigY - sourceY;
+                            offscreenCtx.fillRect(maskDestX, maskDestY, maskOrigW, maskOrigH);
+                        }
+                    });
+                }
+                // Return PNG data URL for consistency and transparency support
+                return offscreenCanvas.toDataURL('image/png');
+            }
+        }
+
+        (function PreviewImage_init() {
+            // --- DOM Elements ---
+            const prevBtnAfter = document.getElementById('prevBtnAfter');
+            const nextBtnAfter = document.getElementById('nextBtnAfter');
+            // --- Event Listeners ---
+            prevBtnAfter.addEventListener('click', showPreviousImage);
+            nextBtnAfter.addEventListener('click', showNextImage);
+            // --- Functions ---
+            function showPreviousImage() {
+                const currentIndex = window.CACHE['PreviewImage_output']['currentIndex'];
+                if (currentIndex > 0) {
+                    const newIndex = currentIndex - 1;
+                    PreviewImage_execute();
+                    window.CACHE['PreviewImage_output']['currentIndex'] = newIndex;
+                }
+            }
+
+            function showNextImage() {
+                const currentIndex = window.CACHE['PreviewImage_output']['currentIndex'];
+                const processedImageDataUrls = window.CACHE['ApplyMask_output']['processedImageDataUrls'];
+                if (currentIndex < processedImageDataUrls.length - 1) {
+                    const newIndex = currentIndex + 1;
+                    PreviewImage_execute();
+                    window.CACHE['PreviewImage_output']['currentIndex'] = newIndex;
+                }
+            }
+        })();
+
+        function PreviewImage_execute() {
+            // --- Optimizations ---
+            if (WorkflowUtil_canSkipExecution(
+                'PreviewImage_inputHashes',
+                [
+                    ['LoadImageBulk_output', 'currentIndex'],
+                    ['ApplyMask_output', 'processedImageDataUrls'],
+                ],
+            )) {
+                return;
+            }
+            // --- DOM Elements ---
+            const afterCanvas = document.getElementById('afterCanvas');
+            const afterCtx = afterCanvas.getContext('2d');
+            const prevBtnAfter = document.getElementById('prevBtnAfter');
+            const nextBtnAfter = document.getElementById('nextBtnAfter');
+            const indicatorAfter = document.getElementById('indicatorAfter');
+            const downloadArea = document.getElementById('downloadArea');
+            const downloadContainer = document.getElementById('downloadContainer');
+            // --- Inputs ---
+            const currentIndex = window.CACHE['LoadImageBulk_output']['currentIndex'];
+            // const currentIndex = window.CACHE['PreviewImage_output']['currentIndex']; // Default, but can be overriden
+            const processedImageDataUrls = window.CACHE['ApplyMask_output']['processedImageDataUrls'];
+            // --- Functions ---
+            (function displayImage() {
+                const index = currentIndex;
+                const imagesLength = processedImageDataUrls.length;
+                if (imagesLength === 0 || index < 0 || index >= imagesLength) {
+                    // Clear canvases if no valid image to display
+                    DomUtil_clearCanvas(afterCtx, afterCanvas);
+                    DomUtil_updateIndicator(indicatorAfter, imagesLength, currentIndex);
+                    DomUtil_updateNavButtons(prevBtnAfter, nextBtnAfter, imagesLength, currentIndex);
+                    return;
+                }
+
+                const scale = 1;
+
+                // --- Draw on After Canvas ---
+                const processedUrl = processedImageDataUrls[currentIndex];
+                if (processedUrl) { // Check if processed URL exists
+                    const processedImg = new Image();
+                    processedImg.onload = () => {
+                        afterCanvas.width = processedImg.width * scale;
+                        afterCanvas.height = processedImg.height * scale;
+
+                        afterCtx.drawImage(processedImg, 0, 0, afterCanvas.width, afterCanvas.height);
+                    };
+                    processedImg.onerror = () => {
+                        console.error("Error loading processed image data URL for index", index);
+                        DomUtil_clearCanvas(afterCtx, afterCanvas);
+                    }
+                    processedImg.src = processedUrl;
+                } else {
+                     console.warn("No processed image data URL found for index", index);
+                     DomUtil_clearCanvas(afterCtx, afterCanvas); // Clear if no processed data
+                }
+
+                DomUtil_updateIndicator(indicatorAfter, imagesLength, currentIndex);
+                DomUtil_updateNavButtons(prevBtnAfter, nextBtnAfter, imagesLength, currentIndex);
+            })();
+
+            (function displayDownloadableImages() {
+                 downloadContainer.innerHTML = ''; // Clear previous links
+                 if (processedImageDataUrls.length === 0) {
+                     downloadArea.classList.add('hidden');
+                     return;
+                 }
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.innerHTML = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1em' height='1em' viewBox='0 0 24 24'%3E%3C!-- Icon from ProIcons by ProCode - https://github.com/ProCode-Software/proicons/blob/main/LICENSE --%3E%3Cpath fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M12.074 3.25v12.478M6.19 10.465l4.822 4.822c.293.293.677.44 1.06.44m5.883-5.262l-4.822 4.822c-.293.293-.677.44-1.06.44m8.677.788v.935a3.3 3.3 0 0 1-3.3 3.3H6.55a3.3 3.3 0 0 1-3.3-3.3v-.935'/%3E%3C/svg%3E" /> Download`;
+                downloadBtn.className = "bg-white text-black py-2 px-4 rounded shadow transition duration-200 flex items-center justify-center content-center gap-1";
+                downloadBtn.onclick = () => {
+                    processedImageDataUrls.forEach((dataUrl, index) => {
+                        if (!dataUrl) return;
+                        
+                        const originalFile = originalImages[index].file;
+                        const baseName = originalFile.name.substring(0, originalFile.name.lastIndexOf('.')) || `image_${index + 1}`;
+                        const filename = `${baseName}_processed.png`;
+                        
+                        const a = document.createElement('a');
+                        a.href = dataUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                    });
+                };
+                downloadContainer.appendChild(downloadBtn);
+                downloadArea.classList.remove('hidden'); // Show the area
+            })();
+        }
+
+        // NOOP
+        function resetState() {
+            // originalImages = [];
+            // processedImageDataUrls = [];
+            // currentIndex = 0;
+            // cropRect = null;
+            // maskRects = [];
+            // activeTool = null;
+            // isDrawing = false;
+            // DomUtil_clearCanvas(beforeCtx, beforeCanvas);
+            // DomUtil_clearCanvas(maskCtx, maskCanvas);
+            // updateNavButtons();
+            // updateIndicators();
+            // setActiveTool(null);
+            // indicatorRect.style.display = 'none';
+            // downloadContainer.innerHTML = ''; // Clear download links
+            // downloadArea.classList.add('hidden'); // Hide download area
+            // uploadStatus.textContent = 'No images selected.';
+        }
+
+        // --- Initial State ---
+        resetState(); // Set initial state on load
+
+    </script>
+
+</body>
+</html>
+
+
