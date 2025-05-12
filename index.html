@@ -177,8 +177,8 @@
                         const end = prediction.bottomRight;
                         const width = end[0] - start[0];
                         const height = end[1] - start[1];
-                        const shrinkX = 50;
-                        const shrinkY = -180;
+                        const shrinkX = 0;
+                        const shrinkY = -150;
                         canvasContext.fillStyle = 'black'; 
                         canvasContext.fillRect(start[0]+shrinkX/2, start[1]+shrinkY/4, width-shrinkX, height-shrinkY/2);
                     });
